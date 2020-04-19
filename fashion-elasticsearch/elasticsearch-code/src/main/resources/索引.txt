@@ -1,0 +1,25 @@
+
+PUT /code-mapping
+{
+  "mappings": {
+    "currentCode": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "relatedCodes": {
+          "type": "nested",
+          "properties": {
+            "name": {
+              "type": "keyword"
+            },
+            "codeMappedId":{
+              "type": "keyword"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
