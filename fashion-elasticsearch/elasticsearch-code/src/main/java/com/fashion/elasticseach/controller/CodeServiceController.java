@@ -2,9 +2,12 @@ package com.fashion.elasticseach.controller;
 
 
 import com.fashion.elasticseach.interfaces.CodeMapService;
+import com.fashion.elasticseach.pojo.CodeRequest;
+import com.fashion.elasticseach.pojo.IdSourceInfo;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 public class CodeServiceController {
@@ -24,4 +27,14 @@ public class CodeServiceController {
         return  "刪除成功";
     }
 
+    @PostMapping("/code/add2")
+    public String addCode2(@RequestBody CodeRequest request){
+        codeMapService.addCode(request.getCode1(),request.getCode2());
+        return "添加成功" ;
+    }
+
+    @PostMapping("/code/relate")
+    public List<IdSourceInfo> relateCode(@RequestBody IdSourceInfo code){
+        return codeMapService.getRelateCode(code);
+    }
 }

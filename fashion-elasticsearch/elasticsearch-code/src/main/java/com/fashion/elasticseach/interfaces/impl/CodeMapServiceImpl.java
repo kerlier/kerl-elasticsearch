@@ -38,6 +38,8 @@ public class CodeMapServiceImpl implements CodeMapService {
 
     @Value("${type.name}")
     private String TYPE_NAME;
+
+    private Integer DEPTH = 10;
     private static CodeSourceInfo code1;
 
     private static CodeSourceInfo code2;
@@ -102,7 +104,6 @@ public class CodeMapServiceImpl implements CodeMapService {
     @Override
     public boolean deleteCodeMap() {
         boolean success = true;
-
         try {
             BulkRequestBuilder bulkRequestBuilder = client.prepareBulk();
             String mappedId = getCodeMappedId(code1, code2);
@@ -115,6 +116,67 @@ public class CodeMapServiceImpl implements CodeMapService {
         return false;
     }
 
+    @Override
+    public boolean addCode(IdSourceInfo code1, IdSourceInfo code2) {
+
+        try {
+            String mappedId = getCodeMappedId(code1.getName(), code2.getName());
+            code1.setCodeMappedId(mappedId);
+            code2.setCodeMappedId(mappedId);
+            BulkRequestBuilder bulkRequestBuilder = client.prepareBulk();
+            //更新code1
+            CodeMappedState codeMappedState1 = searchCodeMappedState(code1);
+            updateCodeMappedState(bulkRequestBuilder,codeMappedState1,code1,code2);
+
+            //更新code2
+            CodeMappedState codeMappedState2 = searchCodeMappedState(code2);
+            updateCodeMappedState(bulkRequestBuilder,codeMappedState2,code2,code1);
+
+            bulkRequestBuilder.execute().actionGet();
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
+    @Override
+    public List<IdSourceInfo> getRelateCode(IdSourceInfo code) {
+        List<IdSourceInfo> relateCodes = new ArrayList<>();
+        List<String> uniqueNames = new ArrayList<>();
+        uniqueNames.add(code.getName());
+        SearchRequestBuilder searchRequestBuilder = client.prepareSearch(INDEX_NAME).setTypes(TYPE_NAME);
+        search(relateCodes,uniqueNames,searchRequestBuilder,code,0);
+        return relateCodes;
+    }
+
+    private void search(List<IdSourceInfo> relateCodes,List<String> uniqueNames,
+                        SearchRequestBuilder searchRequestBuilder,IdSourceInfo code,int depth){
+        if(depth>=DEPTH){
+            return ;
+        }
+        SearchResponse searchResponse = searchRequestBuilder.setQuery(
+                QueryBuilders.termQuery("currentCode.name.keyword", code.getName()))
+                .execute().actionGet();
+
+        List<IdSourceInfo> thisLoopCode = new ArrayList<>();
+        if(searchResponse.getHits().totalHits> 0) {
+            SearchHit firstHits = searchResponse.getHits().getHits()[0];
+            String json = firstHits.getSourceAsString();
+            CodeMappedState mappedState = JSONObject.parseObject(json, CodeMappedState.class);
+            List<IdSourceInfo> codes = mappedState.getRelatedCodes();
+            for (IdSourceInfo idSourceInfo : codes) {
+                if(!uniqueNames.contains(idSourceInfo.getName())){
+                    relateCodes.add(idSourceInfo);
+                    thisLoopCode.add(idSourceInfo);
+                    uniqueNames.add(idSourceInfo.getName());
+                }
+            }
+        }
+        for (IdSourceInfo idSourceInfo : thisLoopCode) {
+            search(relateCodes,uniqueNames,searchRequestBuilder,idSourceInfo,depth+1);
+        }
+    }
 
     private CodeMappedState searchCodeMappedState( IdSourceInfo idSourceInfo){
         SearchRequestBuilder searchRequestBuilder = client.prepareSearch(INDEX_NAME).setTypes(TYPE_NAME);
@@ -173,7 +235,15 @@ public class CodeMapServiceImpl implements CodeMapService {
         }
     }
 
-
+    public String getCodeMappedId(String name1, String name2)throws  Exception{
+        StringBuffer originalCode = new StringBuffer();
+        if(name1.compareTo(name2)>0){
+            originalCode.append(name1).append(name2);
+        }else{
+            originalCode.append(name2).append(name1);
+        }
+        return  getMd5(originalCode.toString());
+    }
     public String getCodeMappedId(CodeSourceInfo code1, CodeSourceInfo code2)throws  Exception{
         StringBuffer originalCode = new StringBuffer();
         if(code1.getCode().compareTo(code2.getCode())>0){
